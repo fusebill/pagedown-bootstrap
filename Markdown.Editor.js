@@ -17,39 +17,92 @@
             isOpera: /opera/.test(nav.userAgent.toLowerCase())
         };
 
+    var defaultsStrings = {
+        bold: "Strong <strong> Ctrl+B",
+        boldexample: "strong text",
+
+        italic: "Emphasis <em> Ctrl+I",
+        italicexample: "emphasized text",
+
+        link: "Hyperlink <a> Ctrl+L",
+        linkdescription: "enter link description here",
+        linkdialogtitle: "Insert Hyperlink",
+        linkdialog: "<p>http://example.com/ \"optional title\"</p>",
+
+        quote: "Blockquote <blockquote> Ctrl+Q",
+        quoteexample: "Blockquote",
+
+        code: "Code Sample <pre><code> Ctrl+K",
+        codeexample: "enter code here",
+
+        image: "Image <img> Ctrl+G",
+        imagedescription: "enter image description here",
+        imagedialogtitle: "Insert Image",
+        imagedialog: "Enter url",
+
+        olist: "Numbered List <ol> Ctrl+O",
+        ulist: "Bulleted List <ul> Ctrl+U",
+        litem: "List item",
+
+        heading: "Heading <h1>/<h2> Ctrl+H",
+        headingexample: "Heading",
+
+        hr: "Horizontal Rule <hr> Ctrl+R",
+
+        undo: "Undo - Ctrl+Z",
+        redo: "Redo - Ctrl+Y",
+        redomac: "Redo - Ctrl+Shift+Z",
+
+        help: "Markdown Editing Help"
+    };
+
 
     // -------------------------------------------------------------------
     //  YOUR CHANGES GO HERE
     //
-    // I've tried to localize the things you are likely to change to 
+    // I've tried to localize the things you are likely to change to
     // this area.
     // -------------------------------------------------------------------
-
-    // The text that appears on the upper part of the dialog box when
-    // entering links.
-    var linkDialogText = "<p>http://example.com/ \"optional title\"</p>";
-    var imageDialogText = "<p>http://example.com/images/diagram.jpg \"optional title\"</p>";
 
     // The default text that appears in the dialog input box when entering
     // links.
     var imageDefaultText = "http://";
     var linkDefaultText = "http://";
 
-    var defaultHelpHoverTitle = "Markdown Editing Help";
-
     // -------------------------------------------------------------------
     //  END OF YOUR CHANGES
     // -------------------------------------------------------------------
 
-    // help, if given, should have a property "handler", the click handler for the help button,
-    // and can have an optional property "title" for the button's tooltip (defaults to "Markdown Editing Help").
-    // If help isn't given, not help button is created.
+    // options, if given, can have the following properties:
+    //   options.helpButton = { handler: yourEventHandler }
+    //   options.strings = { italicexample: "slanted text" }
+    // `yourEventHandler` is the click handler for the help button.
+    // If `options.helpButton` isn't given, not help button is created.
+    // `options.strings` can have any or all of the same properties as
+    // `defaultStrings` above, so you can just override some string displayed
+    // to the user on a case-by-case basis, or translate all strings to
+    // a different language.
+    //
+    // For backwards compatibility reasons, the `options` argument can also
+    // be just the `helpButton` object, and `strings.help` can also be set via
+    // `helpButton.title`. This should be considered legacy.
     //
     // The constructed editor object has the methods:
     // - getConverter() returns the markdown converter object that was passed to the constructor
     // - run() actually starts the editor; should be called after all necessary plugins are registered. Calling this more than once is a no-op.
     // - refreshPreview() forces the preview to be updated. This method is only available after run() was called.
-    Markdown.Editor = function (markdownConverter, idPostfix, help) {
+    Markdown.Editor = function (markdownConverter, idPostfix, options) {
+        
+        options = options || {};
+
+        if (typeof options.handler === "function") { //backwards compatible behavior
+            options = { helpButton: options };
+        }
+        options.strings = options.strings || {};
+        if (options.helpButton) {
+            options.strings.help = options.strings.help || options.helpButton.title;
+        }
+        var getString = function (identifier) { return options.strings[identifier] || defaultsStrings[identifier]; }
 
         idPostfix = idPostfix || "";
 
@@ -71,7 +124,7 @@
                 return; // already initialized
 
             panels = new PanelCollection(idPostfix);
-            var commandManager = new CommandManager(hooks);
+            var commandManager = new CommandManager(hooks, getString);
             var previewManager = new PreviewManager(markdownConverter, panels, function () { hooks.onPreviewRefresh(); });
             var undoManager, uiManager;
 
@@ -88,7 +141,7 @@
                 }
             }
 
-            uiManager = new UIManager(idPostfix, panels, undoManager, previewManager, commandManager, help);
+            uiManager = new UIManager(idPostfix, panels, undoManager, previewManager, commandManager, options.helpButton, getString);
             uiManager.setUndoRedoButtonStates();
 
             var forceRefresh = that.refreshPreview = function () { previewManager.refresh(true); };
@@ -160,7 +213,7 @@
             beforeReplacer = function (s) { that.before += s; return ""; }
             afterReplacer = function (s) { that.after = s + that.after; return ""; }
         }
-        
+
         this.selection = this.selection.replace(/^(\s*)/, beforeReplacer).replace(/(\s*)$/, afterReplacer);
     };
 
@@ -228,14 +281,14 @@
         }
     };
 
-    // end of Chunks 
+    // end of Chunks
 
     // A collection of the important regions on the page.
     // Cached so we don't have to keep traversing the DOM.
     // Also holds ieCachedRange and ieCachedScrollTop, where necessary; working around
     // this issue:
     // Internet explorer has problems with CSS sprite buttons that use HTML
-    // lists.  When you click on the background image "button", IE will 
+    // lists.  When you click on the background image "button", IE will
     // select the non-existent link text and discard the selection in the
     // textarea.  The solution to this is to cache the textarea selection
     // on the button's mousedown event and set a flag.  In the part of the
@@ -517,13 +570,13 @@
 
             var handled = false;
 
-            if (event.ctrlKey || event.metaKey) {
+            if ((event.ctrlKey || event.metaKey) && !event.altKey) {
 
                 // IE and Opera do not support charCode.
                 var keyCode = event.charCode || event.keyCode;
                 var keyCodeChar = String.fromCharCode(keyCode);
 
-                switch (keyCodeChar) {
+                switch (keyCodeChar.toLowerCase()) {
 
                     case "y":
                         undoObj.redo();
@@ -580,7 +633,7 @@
                     setMode("escape");
                 }
                 else if ((keyCode < 16 || keyCode > 20) && keyCode != 91) {
-                    // 16-20 are shift, etc. 
+                    // 16-20 are shift, etc.
                     // 91: left window key
                     // I think this might be a little messed up since there are
                     // a lot of nonprinting keys above 20.
@@ -593,7 +646,7 @@
             util.addEvent(panels.input, "keypress", function (event) {
                 // keyCode 89: y
                 // keyCode 90: z
-                if ((event.ctrlKey || event.metaKey) && (event.keyCode == 89 || event.keyCode == 90)) {
+                if ((event.ctrlKey || event.metaKey) && !event.altKey && (event.keyCode == 89 || event.keyCode == 90)) {
                     event.preventDefault();
                 }
             });
@@ -724,7 +777,7 @@
 
                 if (panels.ieCachedRange)
                     stateObj.scrollTop = panels.ieCachedScrollTop; // this is set alongside with ieCachedRange
-                
+
                 panels.ieCachedRange = null;
 
                 this.setInputAreaSelection();
@@ -964,7 +1017,6 @@
         init();
     };
 
-    
     // This simulates a modal dialog box and asks for the URL when you
     // click the hyperlink or image buttons.
     //
@@ -1018,89 +1070,59 @@
         };
 
 
-
         // Create the text input box form/window.
         var createDialog = function () {
-            // <div class="modal" id="myModal">
-            //   <div class="modal-header">
-            //     <a class="close" data-dismiss="modal">×</a>
-            //     <h3>Modal header</h3>
-            //   </div>
-            //   <div class="modal-body">
-            //     <p>One fine body…</p>
-            //   </div>
-            //   <div class="modal-footer">
-            //     <a href="#" class="btn btn-primary">Save changes</a>
-            //     <a href="#" class="btn">Close</a>
-            //   </div>
-            // </div>
 
             // The main dialog box.
             dialog = doc.createElement("div");
             dialog.className = "modal hide fade";
-            dialog.style.display = "none";
 
             // The header.
             var header = doc.createElement("div");
             header.className = "modal-header";
-            header.innerHTML = '<a class="close" data-dismiss="modal">×</a> <h3>'+title+'</h3>';
+            header.innerHTML = '<button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button><h3 id="myModalLabel">' + title + '</h3>';
             dialog.appendChild(header);
 
+            var form = document.createElement("form");
+            dialog.appendChild(form);
+
             // The body.
-            var body = doc.createElement("div");
+            var body = document.createElement("div");
             body.className = "modal-body";
-            dialog.appendChild(body);
+            form.appendChild(body);
 
-            // The footer.
-            var footer = doc.createElement("div");
-            footer.className = "modal-footer";
-            dialog.appendChild(footer);
-
-            // The dialog text.
-            var question = doc.createElement("p");
+            var question = doc.createElement("label");
             question.innerHTML = text;
-            question.style.padding = "5px";
+            question.for = "input";
             body.appendChild(question);
 
-            // The web form container for the text box and buttons.
-            var form = doc.createElement("form"),
-                style = form.style;
-            form.onsubmit = function () { return close(false); };
-            style.padding = "0";
-            style.margin = "0";
-            body.appendChild(form);
-
-            // The input text box
             input = doc.createElement("input");
             input.type = "text";
             input.value = defaultInputText;
-            style = input.style;
-            style.display = "block";
-            style.width = "80%";
-            style.marginLeft = style.marginRight = "auto";
-            form.appendChild(input);
+            input.id = "input";
+            body.appendChild(input);
 
-            // The ok button
-            var okButton = doc.createElement("button");
-            okButton.className = "btn btn-primary";
-            okButton.type = "button";
-            okButton.onclick = function () { return close(false); };
-            okButton.innerHTML = "OK";
+            // The footer
+            var footer = document.createElement("div");
+            footer.className = "modal-footer";
 
-            // The cancel button
-            var cancelButton = doc.createElement("button");
-            cancelButton.className = "btn btn-primary";
-            cancelButton.type = "button";
-            cancelButton.onclick = function () { return close(true); };
-            cancelButton.innerHTML = "Cancel";
+            var okBtn = document.createElement("button");
+            okBtn.className = "btn btn-primary";
+            okBtn.type = "submit";
+            okBtn.innerHTML = "OK";
+            okBtn.onclick = function () { return close(false); };
+            footer.appendChild(okBtn);
 
-            footer.appendChild(okButton);
-            footer.appendChild(cancelButton);
+            var cancelBtn = document.createElement("button");
+            cancelBtn.className = "btn";
+            cancelBtn.type = "button";
+            cancelBtn.innerHTML = "Cancel";
+            cancelBtn.onclick = function () { return close(true); };
+            footer.appendChild(cancelBtn);
 
-            util.addEvent(doc.body, "keydown", checkEscape);
+            form.appendChild(footer);
 
             doc.body.appendChild(dialog);
-
         };
 
         // Why is this in a zero-length timeout?
@@ -1121,21 +1143,18 @@
                 range.moveEnd("character", defTextLen);
                 range.select();
             }
-            
+
             $(dialog).on('shown', function () {
                 input.focus();
-            })
-            
+            })            
             $(dialog).on('hidden', function () {
                 dialog.parentNode.removeChild(dialog);
             })
-
-            $(dialog).modal()
-
+            $(dialog).modal('show')
         }, 0);
     };
 
-    function UIManager(postfix, panels, undoManager, previewManager, commandManager, helpOptions) {
+    function UIManager(postfix, panels, undoManager, previewManager, commandManager, helpOptions, getString) {
 
         var inputBox = panels.input,
             buttons = {}; // buttons.undo, buttons.link, etc. The actual DOM elements.
@@ -1238,7 +1257,6 @@
 
         // Perform the button's action.
         function doClick(button) {
-
             inputBox.focus();
 
             if (button.textOp) {
@@ -1263,7 +1281,7 @@
                 //
                 // var link = CreateLinkDialog();
                 // makeMarkdownLink(link);
-                // 
+                //
                 // Instead of this straightforward method of handling a
                 // dialog I have to pass any code which would execute
                 // after the dialog is dismissed (e.g. link creation)
@@ -1298,22 +1316,16 @@
         };
 
         function setupButton(button, isEnabled) {
+            button.disabled = !isEnabled;
 
-            if (isEnabled) {
-                button.disabled = false;
-
-                if (!button.isHelp) {
-                    button.onclick = function () {
-                        if (this.onmouseout) {
-                            this.onmouseout();
-                        }
-                        doClick(this);
-                        return false;
+            if (isEnabled && !button.isHelp) {
+                button.onclick = function () {
+                    if (this.onmouseout) {
+                        this.onmouseout();
                     }
+                    doClick(this);
+                    return false;
                 }
-            }
-            else {
-                button.disabled = true;
             }
         }
 
@@ -1324,78 +1336,71 @@
         }
 
         function makeSpritedButtonRow() {
-
             var buttonBar = panels.buttonBar;
+
             var buttonRow = document.createElement("div");
             buttonRow.id = "wmd-button-row" + postfix;
             buttonRow.className = 'btn-toolbar';
             buttonRow = buttonBar.appendChild(buttonRow);
-
             var makeButton = function (id, title, icon, textOp, group) {
                 var button = document.createElement("button");
                 button.className = "btn";
                 var buttonImage = document.createElement("i");
                 buttonImage.className = icon;
-                button.id = id + postfix;
                 button.appendChild(buttonImage);
+                button.id = id + postfix;
                 button.title = title;
-                $(button).tooltip({placement: 'bottom'})
+                button.type = "button";
+                $(button).tooltip({placement: 'bottom'});
                 if (textOp)
                     button.textOp = textOp;
                 setupButton(button, true);
-                if (group) {
-                    group.appendChild(button);
-                } else {
-                    buttonRow.appendChild(button);
-                }
+                group.appendChild(button);
                 return button;
-            };
-            var makeGroup = function (num) {
+            }
+            var makeGroup = function () {
                 var group = document.createElement("div");
-                group.className = "btn-group wmd-button-group" + num;
-                group.id = "wmd-button-group" + num + postfix;
+                group.className = "btn-group wmd-button-group";
+                group.id = "wmd-button-group";
                 buttonRow.appendChild(group);
                 return group
             }
+            var group = makeGroup();            
+            buttons.bold = makeButton("wmd-bold-button", getString("bold"), "icon-bold", bindCommand("doBold"), group);
+            buttons.italic = makeButton("wmd-italic-button", getString("italic"), "icon-italic", bindCommand("doItalic"), group);
 
-            group1 = makeGroup(1);
-            buttons.bold = makeButton("wmd-bold-button", "Bold - Ctrl+B", "icon-bold", bindCommand("doBold"), group1);
-            buttons.italic = makeButton("wmd-italic-button", "Italic - Ctrl+I", "icon-italic", bindCommand("doItalic"), group1);
-            
-            group2 = makeGroup(2);
-            buttons.link = makeButton("wmd-link-button", "Link - Ctrl+L", "icon-link", bindCommand(function (chunk, postProcessing) {
+            var group = makeGroup();            
+            buttons.link = makeButton("wmd-link-button", getString("link"), "icon-link", bindCommand(function (chunk, postProcessing) {
                 return this.doLinkOrImage(chunk, postProcessing, false);
-            }), group2);
-            buttons.quote = makeButton("wmd-quote-button", "Blockquote - Ctrl+Q", "icon-blockquote", bindCommand("doBlockquote"), group2);
-            buttons.code = makeButton("wmd-code-button", "Code Sample - Ctrl+K", "icon-code", bindCommand("doCode"), group2);
-            buttons.image = makeButton("wmd-image-button", "Image - Ctrl+G", "icon-picture", bindCommand(function (chunk, postProcessing) {
+            }), group);
+            buttons.quote = makeButton("wmd-quote-button", getString("quote"), "icon-blockquote", bindCommand("doBlockquote"), group);
+            buttons.code = makeButton("wmd-code-button", getString("code"), "icon-code", bindCommand("doCode"), group);
+            buttons.image = makeButton("wmd-image-button", getString("image"), "icon-picture", bindCommand(function (chunk, postProcessing) {
                 return this.doLinkOrImage(chunk, postProcessing, true);
-            }), group2);
+            }), group);
 
-            group3 = makeGroup(3);
-            buttons.olist = makeButton("wmd-olist-button", "Numbered List - Ctrl+O", "icon-list", bindCommand(function (chunk, postProcessing) {
+            var group = makeGroup();            
+            buttons.olist = makeButton("wmd-olist-button", getString("olist"), "icon-list", bindCommand(function (chunk, postProcessing) {
                 this.doList(chunk, postProcessing, true);
-            }), group3);
-            buttons.ulist = makeButton("wmd-ulist-button", "Bulleted List - Ctrl+U", "icon-bullet-list", bindCommand(function (chunk, postProcessing) {
+            }), group);
+            buttons.ulist = makeButton("wmd-ulist-button", getString("ulist"), "icon-bullet-list", bindCommand(function (chunk, postProcessing) {
                 this.doList(chunk, postProcessing, false);
-            }), group3);
-            buttons.heading = makeButton("wmd-heading-button", "Heading - Ctrl+H", "icon-header", bindCommand("doHeading"), group3);
-            buttons.hr = makeButton("wmd-hr-button", "Horizontal Rule - Ctrl+R", "icon-hr-line", bindCommand("doHorizontalRule"), group3);
-            
-            group4 = makeGroup(4);
-            buttons.undo = makeButton("wmd-undo-button", "Undo - Ctrl+Z", "icon-undo", null, group4);
+            }), group);
+            buttons.heading = makeButton("wmd-heading-button", getString("heading"), "icon-header", bindCommand("doHeading"), group);
+            buttons.hr = makeButton("wmd-hr-button", getString("hr"), "icon-hr-line", bindCommand("doHorizontalRule"), group);
+
+            var group = makeGroup();            
+            buttons.undo = makeButton("wmd-undo-button", getString("undo"), "icon-undo", null, group);
             buttons.undo.execute = function (manager) { if (manager) manager.undo(); };
 
             var redoTitle = /win/.test(nav.platform.toLowerCase()) ?
-                "Redo - Ctrl+Y" :
-                "Redo - Ctrl+Shift+Z"; // mac and other non-Windows platforms
+                getString("redo") :
+                getString("redomac"); // mac and other non-Windows platforms
 
-            buttons.redo = makeButton("wmd-redo-button", redoTitle, "icon-share-alt", null, group4);
+            buttons.redo = makeButton("wmd-redo-button", redoTitle, "icon-share-alt", null, group);
             buttons.redo.execute = function (manager) { if (manager) manager.redo(); };
 
             if (helpOptions) {
-                group5 = makeGroup(5);
-                group5.className = group5.className + " pull-right";
                 var helpButton = document.createElement("button");
                 var helpButtonImage = document.createElement("i");
                 helpButtonImage.className = "icon-question-sign";
@@ -1403,12 +1408,11 @@
                 helpButton.className = "btn";
                 helpButton.id = "wmd-help-button" + postfix;
                 helpButton.isHelp = true;
-                helpButton.title = helpOptions.title || defaultHelpHoverTitle;
-                $(helpButton).tooltip({placement: 'bottom'})
+                helpButton.title = getString("help");
                 helpButton.onclick = helpOptions.handler;
 
                 setupButton(helpButton, true);
-                group5.appendChild(helpButton);
+                buttonRow.appendChild(helpButton);
                 buttons.help = helpButton;
             }
 
@@ -1426,8 +1430,9 @@
 
     }
 
-    function CommandManager(pluginHooks) {
+    function CommandManager(pluginHooks, getString) {
         this.hooks = pluginHooks;
+        this.getString = getString;
     }
 
     var commandProto = CommandManager.prototype;
@@ -1457,11 +1462,11 @@
     };
 
     commandProto.doBold = function (chunk, postProcessing) {
-        return this.doBorI(chunk, postProcessing, 2, "strong text");
+        return this.doBorI(chunk, postProcessing, 2, this.getString("boldexample"));
     };
 
     commandProto.doItalic = function (chunk, postProcessing) {
-        return this.doBorI(chunk, postProcessing, 1, "emphasized text");
+        return this.doBorI(chunk, postProcessing, 1, this.getString("italicexample"));
     };
 
     // chunk: The selected region that will be enclosed with */**
@@ -1597,7 +1602,7 @@
             });
             if (title) {
                 title = title.trim ? title.trim() : title.replace(/^\s*/, "").replace(/\s*$/, "");
-                title = $.trim(title).replace(/"/g, "quot;").replace(/\(/g, "&#40;").replace(/\)/g, "&#41;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                title = title.replace(/"/g, "quot;").replace(/\(/g, "&#40;").replace(/\)/g, "&#41;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             }
             return title ? link + ' "' + title + '"' : link;
         });
@@ -1662,23 +1667,22 @@
 
                     if (!chunk.selection) {
                         if (isImage) {
-                            chunk.selection = "enter image description here";
+                            chunk.selection = that.getString("imagedescription");
                         }
                         else {
-                            chunk.selection = "enter link description here";
+                            chunk.selection = that.getString("linkdescription");
                         }
                     }
                 }
                 postProcessing();
             };
 
-
             if (isImage) {
                 if (!this.hooks.insertImageDialog(linkEnteredCallback))
-                    ui.prompt('Insert Image', imageDialogText, imageDefaultText, linkEnteredCallback);
+                    ui.prompt(this.getString("imagedialogtitle"), this.getString("imagedialog"), imageDefaultText, linkEnteredCallback);
             }
             else {
-                ui.prompt('Insert Link', linkDialogText, linkDefaultText, linkEnteredCallback);
+                ui.prompt(this.getString("linkdialogtitle"), this.getString("linkdialog"), linkDefaultText, linkEnteredCallback);
             }
             return true;
         }
@@ -1745,7 +1749,7 @@
             });
 
         chunk.selection = chunk.selection.replace(/^(\s|>)+$/, "");
-        chunk.selection = chunk.selection || "Blockquote";
+        chunk.selection = chunk.selection || this.getString("quoteexample");
 
         // The original code uses a regular expression to find out how much of the
         // text *directly before* the selection already was a blockquote:
@@ -1902,7 +1906,7 @@
 
             if (!chunk.selection) {
                 chunk.startTag = "    ";
-                chunk.selection = "enter code here";
+                chunk.selection = this.getString("codeexample");
             }
             else {
                 if (/^[ ]{0,3}\S/m.test(chunk.selection)) {
@@ -1912,7 +1916,7 @@
                         chunk.before += "    ";
                 }
                 else {
-                    chunk.selection = chunk.selection.replace(/^[ ]{4}/gm, "");
+                    chunk.selection = chunk.selection.replace(/^(?:[ ]{4}|[ ]{0,3}\t)/gm, "");
                 }
             }
         }
@@ -1925,7 +1929,7 @@
             if (!chunk.startTag && !chunk.endTag) {
                 chunk.startTag = chunk.endTag = "`";
                 if (!chunk.selection) {
-                    chunk.selection = "enter code here";
+                    chunk.selection = this.getString("codeexample");
                 }
             }
             else if (chunk.endTag && !chunk.startTag) {
@@ -2019,7 +2023,7 @@
             });
 
         if (!chunk.selection) {
-            chunk.selection = "List item";
+            chunk.selection = this.getString("litem");
         }
 
         var prefix = getItemPrefix();
@@ -2051,7 +2055,7 @@
         // make a level 2 hash header around some default text.
         if (!chunk.selection) {
             chunk.startTag = "## ";
-            chunk.selection = "Heading";
+            chunk.selection = this.getString("headingexample");
             chunk.endTag = " ##";
             return;
         }
