@@ -7,7 +7,7 @@ The demo is viewable here: http://samwillis.co.uk/pagedown-bootstrap/demo/browse
 
 New icons based on http://glyphicons.com/, http://dribbble.com/shots/365544-Mini-glyphs-12-px-Free-PSD and the origional icons.
 
-* There were three key issues that were solved locally:
+* There were three key issues that were solved locally which is why this package is not being included from the Nuget package source:
 
  - The menu buttons were acting like submit buttons when pressing Enter.  Changed button types to type button.
  - Dialog boxes were submitting the main form when pressing Enter.  There were two issues to be solved:
